@@ -1,146 +1,186 @@
-// components/HashtagResults.js
+// frontend/src/components/HashtagResults.js
 
 import React, { useState } from 'react';
 
-const TABS = [
-  { id: 'all',      label: '⚡ All',      color: '#3b82f6' },
-  { id: 'trending', label: '🔥 Trending', color: '#ef4444' },
-  { id: 'broad',    label: '📈 Broad',    color: '#10b981' },
-  { id: 'niche',    label: '🎯 Niche',    color: '#8b5cf6' },
-];
-
-function HashtagChip({ item, onCopy }) {
+function Chip({ item }) {
   const [copied, setCopied] = useState(false);
 
-  const handleClick = () => {
+  const copy = () => {
     navigator.clipboard.writeText(item.tag);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
-    if (onCopy) onCopy(item.tag);
   };
 
-  const categoryColors = {
-    trending: { bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.3)',   text: '#fca5a5' },
-    broad:    { bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.3)',  text: '#6ee7b7' },
-    niche:    { bg: 'rgba(139,92,246,0.1)',  border: 'rgba(139,92,246,0.3)',  text: '#c4b5fd' },
+  const colors = {
+    trending: { bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.35)',  text: '#fca5a5' },
+    broad:    { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.35)', text: '#6ee7b7' },
+    niche:    { bg: 'rgba(139,92,246,0.12)', border: 'rgba(139,92,246,0.35)', text: '#c4b5fd' },
   };
 
-  const colors = categoryColors[item.category] || categoryColors.broad;
+  const c = colors[item.category] || colors.broad;
 
   return (
     <button
-      className="hashtag-chip"
-      onClick={handleClick}
-      title={`Score: ${item.score} · ${item.label} · Click to copy`}
-      style={{
-        background: colors.bg,
-        borderColor: colors.border,
-        color: colors.text,
-      }}
+      className="chip"
+      onClick={copy}
+      title={`${item.label} · Score: ${item.score} · Source: ${item.source} · Click to copy`}
+      style={{ background: c.bg, borderColor: c.border, color: c.text }}
     >
       <span className="chip-tag">{copied ? '✓ Copied!' : item.tag}</span>
-      <span className="chip-score">{item.score}</span>
+      <span className="chip-meta">
+        {item.source === 'realtime_trends' && (
+          <span className="live-dot" title="Real-time trend" />
+        )}
+        {item.score}
+      </span>
     </button>
   );
 }
 
-export default function HashtagResults({ result, activeTab, setActiveTab, displayedHashtags, platform }) {
-  const [copiedAll, setCopiedAll] = useState(false);
-  const [copiedTags, setCopiedTags] = useState([]);
+const TABS = [
+  { id: 'all',      label: '⚡ All'      },
+  { id: 'trending', label: '🔥 Trending' },
+  { id: 'broad',    label: '📈 Broad'    },
+  { id: 'niche',    label: '🎯 Niche'    },
+];
 
-  const handleCopyAll = () => {
-    const allTags = result.hashtags.map(h => h.tag).join(' ');
-    navigator.clipboard.writeText(allTags);
+export default function HashtagResults({ result }) {
+  const [activeTab,     setActiveTab]     = useState('all');
+  const [copiedAll,     setCopiedAll]     = useState(false);
+  const [copiedCaption, setCopiedCaption] = useState(false);
+
+  if (!result) return null;
+
+  const tabData = {
+    all:      result.hashtags || [],
+    trending: result.trending || [],
+    broad:    result.broad    || [],
+    niche:    result.niche    || [],
+  };
+
+  const displayed = tabData[activeTab] || [];
+
+  const copyTab = () => {
+    navigator.clipboard.writeText(displayed.map(h => h.tag).join(' '));
     setCopiedAll(true);
     setTimeout(() => setCopiedAll(false), 2000);
   };
 
-  const handleCopyCategory = () => {
-    const tags = displayedHashtags.map(h => h.tag).join(' ');
-    navigator.clipboard.writeText(tags);
+  const copyCaption = () => {
+    navigator.clipboard.writeText(result.caption_preview || '');
+    setCopiedCaption(true);
+    setTimeout(() => setCopiedCaption(false), 2000);
   };
-
-  const trackCopy = (tag) => {
-    setCopiedTags(prev => [...prev.slice(-4), tag]);
-  };
-
-  // Build the full hashtag string for preview
-  const allTagsString = result.hashtags.slice(0, 10).map(h => h.tag).join(' ');
 
   return (
     <div className="results-panel">
-      {/* Stats row */}
+
+      {/* Source badge + topics + keywords */}
+      <div className="results-top">
+        <div className="source-area">
+          <span className={`source-badge ${result.is_realtime ? 'live' : 'curated'}`}>
+            {result.is_realtime
+              ? `🟢 Live · ${result.trend_source}`
+              : '⚪ Curated Data'}
+          </span>
+          {result.trend_fetched && (
+            <span className="fetch-time">Updated: {result.trend_fetched}</span>
+          )}
+        </div>
+
+        {result.topics && result.topics.length > 0 && (
+          <div className="topics-row">
+            <span className="topics-label">Topics:</span>
+            {result.topics.map(t => (
+              <span key={t} className="topic-tag">{t}</span>
+            ))}
+          </div>
+        )}
+
+        {result.keywords && result.keywords.length > 0 && (
+          <div className="keywords-row">
+            <span className="keywords-label">Keywords:</span>
+            {result.keywords.map(k => (
+              <span key={k} className="keyword-tag">{k}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Stats */}
       <div className="stats-row">
-        <div className="stat-card">
+        <div className="stat-box">
           <span className="stat-num">{result.total}</span>
           <span className="stat-lbl">Total</span>
         </div>
-        <div className="stat-card trending-card">
+        <div className="stat-box trending-box">
           <span className="stat-num">{result.trending?.length || 0}</span>
           <span className="stat-lbl">🔥 Trending</span>
         </div>
-        <div className="stat-card broad-card">
+        <div className="stat-box broad-box">
           <span className="stat-num">{result.broad?.length || 0}</span>
           <span className="stat-lbl">📈 Broad</span>
         </div>
-        <div className="stat-card niche-card">
+        <div className="stat-box niche-box">
           <span className="stat-num">{result.niche?.length || 0}</span>
           <span className="stat-lbl">🎯 Niche</span>
         </div>
+        <div className="stat-box">
+          <span className="stat-num">{result.optimal_count}</span>
+          <span className="stat-lbl">Optimal</span>
+        </div>
       </div>
 
-      {/* Caption preview box */}
-      <div className="caption-preview">
-        <div className="caption-preview-header">
+      {/* Platform tip */}
+      {result.platform_tip && (
+        <div className="platform-tip">
+          💡 <strong>{result.platform}:</strong> {result.platform_tip}
+        </div>
+      )}
+
+      {/* Caption preview */}
+      <div className="caption-box">
+        <div className="caption-header">
           <span className="caption-label">📋 Caption Preview</span>
-          <button className="copy-all-btn" onClick={handleCopyAll}>
-            {copiedAll ? '✓ Copied All!' : '⎘ Copy All Hashtags'}
+          <button className="copy-btn" onClick={copyCaption}>
+            {copiedCaption ? '✓ Copied!' : '⎘ Copy Caption'}
           </button>
         </div>
-        <p className="caption-text">
-          {result.input_text} <span className="caption-tags">{allTagsString}…</span>
-        </p>
+        <p className="caption-text">{result.caption_preview}</p>
       </div>
 
-      {/* Category Tabs */}
-      <div className="tabs-row">
+      {/* Tabs */}
+      <div className="tabs-bar">
         {TABS.map(tab => (
           <button
             key={tab.id}
             className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
             onClick={() => setActiveTab(tab.id)}
-            style={activeTab === tab.id ? { borderColor: tab.color, color: tab.color } : {}}
           >
             {tab.label}
-            <span className="tab-count">
-              {tab.id === 'all'      ? result.hashtags?.length
-               : tab.id === 'trending' ? result.trending?.length
-               : tab.id === 'broad'    ? result.broad?.length
-               :                         result.niche?.length}
-            </span>
+            <span className="tab-count">{tabData[tab.id]?.length || 0}</span>
           </button>
         ))}
-        <button className="copy-cat-btn" onClick={handleCopyCategory} title="Copy this category">
-          ⎘ Copy Tab
+        <button className="copy-tab-btn" onClick={copyTab}>
+          {copiedAll ? '✓ Copied!' : `⎘ Copy ${activeTab}`}
         </button>
       </div>
 
-      {/* Hashtag chips grid */}
+      {/* Chips grid */}
       <div className="chips-grid">
-        {displayedHashtags.length > 0
-          ? displayedHashtags.map((item, i) => (
-              <HashtagChip key={i} item={item} onCopy={trackCopy} />
-            ))
+        {displayed.length > 0
+          ? displayed.map((item, i) => <Chip key={i} item={item} />)
           : <p className="empty-msg">No hashtags in this category.</p>
         }
       </div>
 
       {/* Legend */}
-      <div className="legend-row">
-        <span className="legend-item"><span className="dot-trending" /> Trending (score ≥ 80)</span>
-        <span className="legend-item"><span className="dot-broad" /> Broad (60–79)</span>
-        <span className="legend-item"><span className="dot-niche" /> Niche (&lt;60)</span>
-        <span className="legend-tip">💡 Click any hashtag to copy it</span>
+      <div className="legend">
+        <span className="legend-item"><span className="dot red"    /> Trending (≥75)</span>
+        <span className="legend-item"><span className="dot green"  /> Broad (55–74)</span>
+        <span className="legend-item"><span className="dot purple" /> Niche (&lt;55)</span>
+        <span className="legend-item"><span className="live-dot"   /> Live from Google Trends</span>
+        <span className="legend-tip">💡 Click any tag to copy</span>
       </div>
     </div>
   );

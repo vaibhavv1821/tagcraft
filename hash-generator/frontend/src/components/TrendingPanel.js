@@ -1,37 +1,57 @@
-// components/TrendingPanel.js
+// frontend/src/components/TrendingPanel.js
 
 import React, { useState } from 'react';
 
-export default function TrendingPanel({ trending, platform, platforms, onPlatformChange }) {
+const PLATFORMS = [
+  { id: 'all',       icon: '🌐' },
+  { id: 'instagram', icon: '📸' },
+  { id: 'twitter',   icon: '𝕏'  },
+  { id: 'linkedin',  icon: '💼' },
+  { id: 'youtube',   icon: '▶'  },
+  { id: 'github',    icon: '🐙' },
+];
+
+const TIPS = {
+  all:       ['Mix trending and niche tags', 'Update hashtags regularly', 'Research competitor tags'],
+  instagram: ['Use 20-30 hashtags per post', 'Put tags in first comment for clean caption', 'Avoid banned hashtags'],
+  twitter:   ['Use only 1-3 hashtags', 'Place at end of tweet', 'Capitalize each word: #MondayMotivation'],
+  linkedin:  ['3-5 hashtags is ideal', 'Use professional tone', 'Follow your own hashtags'],
+  youtube:   ['Add in video description', 'First 3 appear above title', 'Use 3-5 relevant hashtags'],
+  github:    ['Add as repository Topics', 'Use lowercase with hyphens', 'Max 20 topics per repo'],
+};
+
+export default function TrendingPanel({
+  trending, platform, onPlatformChange, isRealtime
+}) {
   const [copied, setCopied] = useState('');
 
-  const handleCopy = (tag) => {
+  const copy = (tag) => {
     navigator.clipboard.writeText(tag);
     setCopied(tag);
     setTimeout(() => setCopied(''), 1500);
   };
 
-  const currentPlatform = platforms.find(p => p.id === platform);
+  const tips = TIPS[platform] || TIPS.all;
 
   return (
     <div className="trending-panel">
-      <div className="trending-header">
-        <h3 className="trending-title">
-          🔥 Trending Now
-        </h3>
-        <p className="trending-sub">
-          {currentPlatform?.icon} {currentPlatform?.label}
-        </p>
+
+      {/* Header */}
+      <div className="tp-header">
+        <h3 className="tp-title">🔥 Trending Now</h3>
+        <span className={`tp-source ${isRealtime ? 'live' : 'curated'}`}>
+          {isRealtime ? '🟢 Live' : '⚪ Curated'}
+        </span>
       </div>
 
-      {/* Mini platform switcher */}
-      <div className="mini-platforms">
-        {platforms.map(p => (
+      {/* Platform switcher */}
+      <div className="tp-platforms">
+        {PLATFORMS.map(p => (
           <button
             key={p.id}
-            className={`mini-platform-btn ${platform === p.id ? 'active' : ''}`}
+            className={`tp-plat-btn ${platform === p.id ? 'active' : ''}`}
             onClick={() => onPlatformChange(p.id)}
-            title={p.label}
+            title={p.id}
           >
             {p.icon}
           </button>
@@ -39,28 +59,22 @@ export default function TrendingPanel({ trending, platform, platforms, onPlatfor
       </div>
 
       {/* Trending list */}
-      <div className="trending-list">
+      <div className="tp-list">
         {trending.length === 0 && (
-          <p className="trending-empty">Loading trending tags…</p>
+          <p className="tp-empty">Loading trends…</p>
         )}
-        {trending.map((item, i) => (
-          <div key={i} className="trending-item">
-            <div className="trending-rank">#{i + 1}</div>
-            <div className="trending-info">
-              <span className="trending-tag">{item.tag}</span>
-              <div className="trending-bar-wrap">
-                <div
-                  className="trending-bar"
-                  style={{ width: `${item.score}%` }}
-                />
+        {trending.slice(0, 15).map((item, i) => (
+          <div key={i} className="tp-item">
+            <span className="tp-rank">#{i + 1}</span>
+            <div className="tp-info">
+              <span className="tp-tag">{item.tag}</span>
+              <div className="tp-bar-wrap">
+                <div className="tp-bar" style={{ width: `${item.score}%` }} />
               </div>
             </div>
-            <div className="trending-right">
-              <span className="trending-score">{item.score}</span>
-              <button
-                className="trending-copy-btn"
-                onClick={() => handleCopy(item.tag)}
-              >
+            <div className="tp-right">
+              <span className="tp-score">{item.score}</span>
+              <button className="tp-copy" onClick={() => copy(item.tag)}>
                 {copied === item.tag ? '✓' : '⎘'}
               </button>
             </div>
@@ -68,18 +82,16 @@ export default function TrendingPanel({ trending, platform, platforms, onPlatfor
         ))}
       </div>
 
-      {/* Info card */}
-      <div className="info-card">
-        <h4>💡 Pro Tips</h4>
+      {/* Tips */}
+      <div className="tips-card">
+        <h4 className="tips-title">💡 {platform.charAt(0).toUpperCase() + platform.slice(1)} Tips</h4>
         <ul className="tips-list">
-          <li>Mix trending + niche tags for best reach</li>
-          <li>Instagram allows up to 30 hashtags</li>
-          <li>LinkedIn: 3–5 hashtags work best</li>
-          <li>Twitter/X: 1–2 hashtags recommended</li>
-          <li>YouTube: use in description</li>
-          <li>GitHub: add to repo topics</li>
+          {tips.map((tip, i) => (
+            <li key={i} className="tips-item">{tip}</li>
+          ))}
         </ul>
       </div>
+
     </div>
   );
 }
