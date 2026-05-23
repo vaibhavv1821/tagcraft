@@ -1,10 +1,12 @@
 // frontend/src/App.js
 
 import React, { useState, useEffect } from 'react';
-import InputPanel      from './components/InputPanel';
-import HashtagResults  from './components/HashtagResults';
-import TrendingPanel   from './components/TrendingPanel';
+import InputPanel          from './components/InputPanel';
+import HashtagResults      from './components/HashtagResults';
+import TrendingPanel       from './components/TrendingPanel';
+import AnalyticsDashboard  from './components/AnalyticsDashboard';
 import { generateHashtags, getTrending, checkHealth } from './services/api';
+import { recordSession, hasData }                     from './services/analytics';
 import './App.css';
 
 export default function App() {
@@ -18,19 +20,21 @@ export default function App() {
   const [error,       setError]       = useState('');
   const [apiOk,       setApiOk]       = useState(null);
   const [isRealtime,  setIsRealtime]  = useState(false);
+  const [showAnalytics,     setShowAnalytics]     = useState(false);
+  const [analyticsHasData,  setAnalyticsHasData]  = useState(false);
 
-  // Health check + load initial trending
   useEffect(() => {
     checkHealth().then(ok => {
       setApiOk(ok);
       if (ok) loadTrending('all', 'IN');
     });
+    setAnalyticsHasData(hasData());
   }, []);
 
   const loadTrending = async (plat, ctry, kw = '') => {
     try {
       const data = await getTrending(plat, ctry, kw);
-      setTrending(data.trending  || []);
+      setTrending(data.trending || []);
       setIsRealtime(data.is_realtime || false);
     } catch {}
   };
@@ -48,6 +52,8 @@ export default function App() {
     try {
       const data = await generateHashtags({ text, platform, count, country });
       setResult(data);
+      recordSession(data);
+      setAnalyticsHasData(true);
       if (data.keywords && data.keywords[0]) {
         loadTrending(platform, country, data.keywords[0]);
       }
@@ -66,8 +72,6 @@ export default function App() {
 
   return (
     <div className="app">
-
-      {/* HEADER */}
       <header className="header">
         <div className="header-inner">
           <div className="brand">
@@ -77,44 +81,43 @@ export default function App() {
               <p className="brand-sub">AI-Powered Hashtag Generator · Real-Time Trends</p>
             </div>
           </div>
-
           <div className="header-right">
+            <button
+              className={`analytics-btn ${analyticsHasData ? 'has-data' : ''}`}
+              onClick={() => setShowAnalytics(true)}
+              title="View Analytics Dashboard"
+            >
+              <span className="analytics-btn-icon">📊</span>
+              <span className="analytics-btn-label">Analytics</span>
+              {analyticsHasData && <span className="analytics-dot" />}
+            </button>
             <div className={`realtime-badge ${isRealtime ? 'live' : 'static'}`}>
               {isRealtime ? '🟢 Live Trends' : '⚪ Curated Data'}
             </div>
             <div className={`api-status ${apiOk === null ? 'pending' : apiOk ? 'ok' : 'err'}`}>
               <span className="api-dot" />
-              <span>
-                {apiOk === null ? 'Connecting…' : apiOk ? 'API Online' : 'API Offline'}
-              </span>
+              <span>{apiOk === null ? 'Connecting…' : apiOk ? 'API Online' : 'API Offline'}</span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* MAIN */}
       <main className="main">
         <div className="layout">
-
-          {/* Left column */}
           <div className="col-left">
             <InputPanel
-              text={text}           setText={setText}
-              platform={platform}   setPlatform={handlePlatformChange}
-              count={count}         setCount={setCount}
-              country={country}     setCountry={setCountry}
+              text={text}         setText={setText}
+              platform={platform} setPlatform={handlePlatformChange}
+              count={count}       setCount={setCount}
+              country={country}   setCountry={setCountry}
               onGenerate={handleGenerate}
               onReset={handleReset}
               loading={loading}
               hasResult={!!result}
             />
-
             {error && <div className="error-banner">⚠ {error}</div>}
-
             {result && <HashtagResults result={result} />}
           </div>
-
-          {/* Right column */}
           <div className="col-right">
             <TrendingPanel
               trending={trending}
@@ -123,13 +126,19 @@ export default function App() {
               isRealtime={isRealtime}
             />
           </div>
-
         </div>
       </main>
 
       <footer className="footer">
         TagCraft v2.0 · NLP + Google Trends · Instagram · Twitter/X · LinkedIn · YouTube · GitHub
       </footer>
+
+      {showAnalytics && (
+        <AnalyticsDashboard onClose={() => {
+          setShowAnalytics(false);
+          setAnalyticsHasData(hasData());
+        }} />
+      )}
     </div>
   );
 }
