@@ -1,36 +1,31 @@
 // frontend/src/components/HashtagResults.js
 
 import React, { useState } from 'react';
+import PerformancePredictor from './PerformancePredictor';
 
 function Chip({ item }) {
   const [copied, setCopied] = useState(false);
-
   const copy = () => {
     navigator.clipboard.writeText(item.tag);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-
   const colors = {
-    trending: { bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.35)',  text: '#fca5a5' },
-    broad:    { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.35)', text: '#6ee7b7' },
-    niche:    { bg: 'rgba(139,92,246,0.12)', border: 'rgba(139,92,246,0.35)', text: '#c4b5fd' },
+    trending: { bg: 'rgba(255,107,107,0.12)', border: 'rgba(255,107,107,0.35)', text: '#fca5a5' },
+    broad:    { bg: 'rgba(78,205,196,0.12)',  border: 'rgba(78,205,196,0.35)',  text: '#6ee7b7' },
+    niche:    { bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.35)', text: '#c4b5fd' },
   };
-
   const c = colors[item.category] || colors.broad;
-
   return (
     <button
       className="chip"
       onClick={copy}
-      title={`${item.label} · Score: ${item.score} · Source: ${item.source} · Click to copy`}
+      title={`${item.label} · Score: ${item.score} · Click to copy`}
       style={{ background: c.bg, borderColor: c.border, color: c.text }}
     >
       <span className="chip-tag">{copied ? '✓ Copied!' : item.tag}</span>
       <span className="chip-meta">
-        {item.source === 'realtime_trends' && (
-          <span className="live-dot" title="Real-time trend" />
-        )}
+        {item.source === 'realtime_trends' && <span className="live-dot" />}
         {item.score}
       </span>
     </button>
@@ -48,6 +43,7 @@ export default function HashtagResults({ result }) {
   const [activeTab,     setActiveTab]     = useState('all');
   const [copiedAll,     setCopiedAll]     = useState(false);
   const [copiedCaption, setCopiedCaption] = useState(false);
+  const [showPredictor, setShowPredictor] = useState(false);
 
   if (!result) return null;
 
@@ -57,7 +53,6 @@ export default function HashtagResults({ result }) {
     broad:    result.broad    || [],
     niche:    result.niche    || [],
   };
-
   const displayed = tabData[activeTab] || [];
 
   const copyTab = () => {
@@ -72,10 +67,14 @@ export default function HashtagResults({ result }) {
     setTimeout(() => setCopiedCaption(false), 2000);
   };
 
+  const hasPredictions = result.predictions &&
+    result.predictions.predictions &&
+    result.predictions.predictions.length > 0;
+
   return (
     <div className="results-panel">
 
-      {/* Source badge + topics + keywords */}
+      {/* Source + topics + keywords + predictor toggle */}
       <div className="results-top">
         <div className="source-area">
           <span className={`source-badge ${result.is_realtime ? 'live' : 'curated'}`}>
@@ -86,28 +85,32 @@ export default function HashtagResults({ result }) {
           {result.trend_fetched && (
             <span className="fetch-time">Updated: {result.trend_fetched}</span>
           )}
+          {hasPredictions && (
+            <button
+              className={`pred-toggle-btn ${showPredictor ? 'active' : ''}`}
+              onClick={() => setShowPredictor(!showPredictor)}
+            >
+              🎯 {showPredictor ? 'Hide Predictions' : 'Performance Predictions'}
+            </button>
+          )}
         </div>
 
         {result.topics && result.topics.length > 0 && (
           <div className="topics-row">
             <span className="topics-label">Topics:</span>
-            {result.topics.map(t => (
-              <span key={t} className="topic-tag">{t}</span>
-            ))}
+            {result.topics.map(t => <span key={t} className="topic-tag">{t}</span>)}
           </div>
         )}
 
         {result.keywords && result.keywords.length > 0 && (
           <div className="keywords-row">
             <span className="keywords-label">Keywords:</span>
-            {result.keywords.map(k => (
-              <span key={k} className="keyword-tag">{k}</span>
-            ))}
+            {result.keywords.map(k => <span key={k} className="keyword-tag">{k}</span>)}
           </div>
         )}
       </div>
 
-      {/* Stats */}
+      {/* Stats row */}
       <div className="stats-row">
         <div className="stat-box">
           <span className="stat-num">{result.total}</span>
@@ -138,7 +141,12 @@ export default function HashtagResults({ result }) {
         </div>
       )}
 
-      {/* Caption preview */}
+      {/* Performance Predictor inline */}
+      {showPredictor && hasPredictions && (
+        <PerformancePredictor predictions={result.predictions} />
+      )}
+
+      {/* Caption */}
       <div className="caption-box">
         <div className="caption-header">
           <span className="caption-label">📋 Caption Preview</span>
@@ -166,7 +174,7 @@ export default function HashtagResults({ result }) {
         </button>
       </div>
 
-      {/* Chips grid */}
+      {/* Chips */}
       <div className="chips-grid">
         {displayed.length > 0
           ? displayed.map((item, i) => <Chip key={i} item={item} />)
@@ -179,7 +187,7 @@ export default function HashtagResults({ result }) {
         <span className="legend-item"><span className="dot red"    /> Trending (≥75)</span>
         <span className="legend-item"><span className="dot green"  /> Broad (55–74)</span>
         <span className="legend-item"><span className="dot purple" /> Niche (&lt;55)</span>
-        <span className="legend-item"><span className="live-dot"   /> Live from Google Trends</span>
+        <span className="legend-item"><span className="live-dot"   /> Live trend</span>
         <span className="legend-tip">💡 Click any tag to copy</span>
       </div>
     </div>
