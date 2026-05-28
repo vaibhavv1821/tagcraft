@@ -1,32 +1,44 @@
-# backend/app.py — TagCraft API v3.0
+# backend/app.py — TagCraft API v4.0 (ML-Powered)
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from src.nlp import (
-    generate_from_text, get_score, get_score_label,
-    categorize, extract_keywords, detect_topics
+    get_score, get_score_label, categorize,
+    extract_keywords, detect_topics
 )
-from src.trends import (
-    get_trending_hashtags, get_cache_status, CURATED_TRENDS
-)
-from src.predictor import predict_all, predict_hashtag
+from src.trends    import get_trending_hashtags, get_cache_status
+from src.predictor import predict_all
+from src.ml_engine import get_engine
 
 app = Flask(__name__)
 CORS(app)
 
+# Pre-load ML engine when server starts
+print("[app] Pre-loading ML engine...")
+_ml = get_engine()
+print(f"[app] ML engine ready: {_ml.ready}")
+
 PLATFORM_CONFIG = {
-    'instagram': {'optimal': 25, 'max': 30, 'note': 'Use 20-30 hashtags per post'},
-    'twitter':   {'optimal': 2,  'max': 3,  'note': 'Use 1-3 hashtags per tweet'},
-    'linkedin':  {'optimal': 5,  'max': 10, 'note': 'Use 3-5 hashtags for best reach'},
-    'youtube':   {'optimal': 8,  'max': 15, 'note': 'Add hashtags in video description'},
-    'github':    {'optimal': 10, 'max': 20, 'note': 'Add as repository topics'},
-    'all':       {'optimal': 15, 'max': 30, 'note': 'Select a platform for best results'},
+    'instagram': {'optimal':25,'max':30,'note':'Use 20-30 hashtags per post'},
+    'twitter':   {'optimal':2, 'max':3, 'note':'Use 1-3 hashtags per tweet'},
+    'linkedin':  {'optimal':5, 'max':10,'note':'Use 3-5 hashtags for best reach'},
+    'youtube':   {'optimal':8, 'max':15,'note':'Add hashtags in video description'},
+    'github':    {'optimal':10,'max':20,'note':'Add as repository topics'},
+    'all':       {'optimal':15,'max':30,'note':'Select a platform for best results'},
 }
 
-def merge_hashtags(text_tags, trend_tags, count=30):
+def split_categories(hashtags):
+    return {
+        'trending': [h for h in hashtags if h['category'] == 'trending'],
+        'broad':    [h for h in hashtags if h['category'] == 'broad'],
+        'niche':    [h for h in hashtags if h['category'] == 'niche'],
+    }
+
+def merge_with_trends(ml_tags, trend_tags, count=30):
+    """Merge ML-generated tags with real-time trend tags."""
     seen, merged = set(), []
-    for item in text_tags:
+    for item in ml_tags:
         key = item['tag'].lower()
         if key not in seen:
             seen.add(key)
@@ -37,29 +49,31 @@ def merge_hashtags(text_tags, trend_tags, count=30):
             seen.add(key)
             score = get_score(tag)
             merged.append({
-                'tag':      tag,
-                'score':    score,
-                'label':    get_score_label(score),
-                'category': categorize(score),
-                'source':   'realtime_trends'
+                'tag':        tag,
+                'score':      score,
+                'label':      get_score_label(score),
+                'category':   categorize(score),
+                'similarity': 0,
+                'source':     'realtime_trends',
+                'method':     'google_trends',
             })
     merged.sort(key=lambda x: x['score'], reverse=True)
     return merged[:count]
 
-def split_categories(hashtags):
-    return {
-        'trending': [h for h in hashtags if h['category'] == 'trending'],
-        'broad':    [h for h in hashtags if h['category'] == 'broad'],
-        'niche':    [h for h in hashtags if h['category'] == 'niche'],
-    }
-
 
 @app.route('/api/health', methods=['GET'])
 def health():
+    engine = get_engine()
     return jsonify({
         'status':   'ok',
-        'message':  'TagCraft API v3.0 running',
-        'features': ['nlp', 'realtime_trends', 'analytics', 'performance_predictor']
+        'message':  'TagCraft API v4.0 — ML Powered',
+        'ml_ready': engine.ready,
+        'ml_model': 'all-MiniLM-L6-v2' if engine.ready else 'tfidf-fallback',
+        'features': [
+            'semantic_ml', 'keybert', 'tfidf',
+            'cosine_similarity', 'google_trends',
+            'analytics', 'performance_predictor'
+        ]
     })
 
 
@@ -77,22 +91,44 @@ def generate():
     count    = min(max(int(data.get('count', 20)), 5), 50)
     country  = data.get('country', 'IN').upper()
 
-    keywords    = extract_keywords(text, top_n=5)
+    engine = get_engine()
+
+    # Step 1: ML semantic hashtag generation
+    ml_hashtags = engine.generate(text, platform=platform, count=count)
+
+    # Step 2: KeyBERT keyword extraction
+    keywords = engine.extract_keywords(text, top_n=6)
+
+    # Step 3: Topic detection
     topics      = detect_topics(text)
     topic_names = [t.split('|')[0] for t in topics[:3]]
 
-    text_hashtags = generate_from_text(text, count=count)
+    # Step 4: Real-time trends
     trend_keyword = keywords[0] if keywords else None
     trend_data    = get_trending_hashtags(
-        platform=platform, keyword=trend_keyword, country=country
+        platform=platform,
+        keyword=trend_keyword,
+        country=country
     )
-    all_hashtags = merge_hashtags(text_hashtags, trend_data['hashtags'], count=count)
+
+    # Step 5: Merge ML + trends
+    all_hashtags = merge_with_trends(
+        ml_hashtags, trend_data['hashtags'], count=count
+    )
     categories   = split_categories(all_hashtags)
     platform_cfg = PLATFORM_CONFIG.get(platform, PLATFORM_CONFIG['all'])
     top_tags_str = ' '.join([h['tag'] for h in all_hashtags[:10]])
 
-    # Auto-predict top 10
+    # Step 6: Performance predictions
     prediction_data = predict_all(all_hashtags, platform=platform, top_n=10)
+
+    # Step 7: ML metadata for frontend
+    ml_metadata = {
+        'model':          'all-MiniLM-L6-v2' if engine.ready else 'tfidf-fallback',
+        'method':         'semantic_cosine_similarity' if engine.ready else 'tfidf',
+        'ml_ready':       engine.ready,
+        'top_similarity': round(ml_hashtags[0]['similarity'], 3) if ml_hashtags else 0,
+    }
 
     return jsonify({
         'hashtags':        all_hashtags,
@@ -113,6 +149,7 @@ def generate():
         'total':           len(all_hashtags),
         'country':         country,
         'predictions':     prediction_data,
+        'ml_metadata':     ml_metadata,
     })
 
 
@@ -121,12 +158,11 @@ def predict():
     data = request.get_json()
     if not data or 'hashtags' not in data:
         return jsonify({'error': 'No hashtags provided'}), 400
-
-    hashtags = data['hashtags']
-    platform = data.get('platform', 'all').lower()
-    top_n    = int(data.get('top_n', 10))
-
-    result = predict_all(hashtags, platform=platform, top_n=top_n)
+    result = predict_all(
+        data['hashtags'],
+        platform=data.get('platform', 'all'),
+        top_n=int(data.get('top_n', 10))
+    )
     return jsonify(result)
 
 
@@ -162,16 +198,13 @@ def get_trending():
 
 @app.route('/api/cache/status', methods=['GET'])
 def cache_status():
-    return jsonify({
-        'cache':   get_cache_status(),
-        'message': 'Cache refreshes every 60 minutes'
-    })
+    return jsonify({'cache': get_cache_status()})
 
 
 if __name__ == '__main__':
-    print('=' * 50)
-    print('  TagCraft API v3.0')
+    print('=' * 55)
+    print('  TagCraft API v4.0 — ML Powered')
+    print('  Model: all-MiniLM-L6-v2 (sentence-transformers)')
     print('  Running on http://localhost:5000')
-    print('  Features: NLP + Trends + Analytics + Predictor')
-    print('=' * 50)
+    print('=' * 55)
     app.run(debug=True, port=5000)
