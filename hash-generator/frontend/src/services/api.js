@@ -1,6 +1,6 @@
 // frontend/src/services/api.js
 
-const BASE = 'http://localhost:5000/api';
+const BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 export async function generateHashtags({ text, platform, count, country = 'IN' }) {
   const res = await fetch(`${BASE}/generate`, {

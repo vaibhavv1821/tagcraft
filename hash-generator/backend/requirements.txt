@@ -7,3 +7,4 @@ sentence-transformers==2.7.0
 keybert==0.8.5
 scikit-learn==1.4.2
 numpy==1.26.4
+gunicorn==21.2.0
